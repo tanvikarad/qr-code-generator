@@ -1,5 +1,6 @@
 import sys
 import qrcode
+from qrcode.exceptions import DataOverflowError
 from dotenv import load_dotenv
 import logging.config
 from pathlib import Path
@@ -25,23 +26,29 @@ def setup_logging():
         ]
     )
 
-def create_directory(path: Path):
+def create_directory(path: Path) -> None:
     try:
         path.mkdir(parents=True, exist_ok=True)
-    except Exception as e:
+    except OSError as e:
         logging.error(f"Failed to create directory {path}: {e}")
-        exit(1)
+        raise SystemExit(1) from e
 
-def is_valid_url(url):
+
+def is_valid_url(url: str) -> bool:
     if validators.url(url):
         return True
-    else:
-        logging.error(f"Invalid URL provided: {url}")
-        return False
+    logging.error(f"Invalid URL provided: {url}")
+    return False
 
-def generate_qr_code(data, path, fill_color='red', back_color='white'):
+
+def generate_qr_code(
+    data: str,
+    path: Path,
+    fill_color: str = 'red',
+    back_color: str = 'white',
+) -> bool:
     if not is_valid_url(data):
-        return  # Exit the function if the URL is not valid
+        return False
 
     try:
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
@@ -52,11 +59,14 @@ def generate_qr_code(data, path, fill_color='red', back_color='white'):
         with path.open('wb') as qr_file:
             img.save(qr_file)
         logging.info(f"QR code successfully saved to {path}")
+        return True
 
-    except Exception as e:
+    except (OSError, ValueError, DataOverflowError) as e:
         logging.error(f"An error occurred while generating or saving the QR code: {e}")
+        return False
 
-def main():
+
+def main() -> int:
     # Set up command-line argument parsing
     parser = argparse.ArgumentParser(description='Generate a QR code.')
     parser.add_argument('--url', help='The URL to encode in the QR code', default='https://github.com/kaw393939')
@@ -76,7 +86,9 @@ def main():
     create_directory(Path.cwd() / QR_DIRECTORY)
     
     # Generate and save the QR code
-    generate_qr_code(args.url, qr_code_full_path, FILL_COLOR, BACK_COLOR)
+    if not generate_qr_code(args.url, qr_code_full_path, FILL_COLOR, BACK_COLOR):
+        return 1
+    return 0
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
